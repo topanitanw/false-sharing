@@ -176,7 +176,7 @@ main (int argc, char ** argv)
                 threads = atoi(optarg);
                 break;
             case 'a':
-                refs = atoi(optarg);
+                refs = strtoul(optarg, NULL, 0);
                 break;
             case 'h':
                 usage(argv[0]);
