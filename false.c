@@ -21,21 +21,21 @@
 #define ERROR(fmt, args...) fprintf(stderr, "EXP-ERR: " fmt, ##args)
 
 
-size_t 
-get_l1_line_sz (void) 
+size_t
+get_l1_line_sz (void)
 {
-	FILE * p = NULL;
-	unsigned sz = 0;
+    FILE * p = NULL;
+    unsigned sz = 0;
 
-	p = fopen(LS_PATH, "r");
-	if (!p) {
-		perror("Couldn't open linux cache descriptor file\n");
-		return 0;
-	}
+    p = fopen(LS_PATH, "r");
+    if (!p) {
+        perror("Couldn't open linux cache descriptor file\n");
+        return 0;
+    }
 
-	fscanf(p, "%d", &sz);
-	fclose(p);
-	return sz;
+    fscanf(p, "%d", &sz);
+    fclose(p);
+    return sz;
 }
 
 
@@ -129,6 +129,7 @@ usage (char * prog)
 
     printf("  -n, --threads <thread count> : number of threads to launch (default=%d, max = l1 line size)\n", DEFAULT_THREADS);
     printf("  -a, --refs <access count> : number of false sharing accesses (default=%d)\n", DEFAULT_REFS);
+    printf("  -l, --line_size <line size in bytes> : line size of the cache in bytes (default=%d)\n", DEFAULT_REFS);
     printf("  -h, ---help : display this message\n");
     printf("  -v, --version : display the version number and exit\n");
 
@@ -144,7 +145,7 @@ version ()
 }
 
 
-int 
+int
 main (int argc, char ** argv)
 {
     unsigned threads   = DEFAULT_THREADS;
@@ -160,12 +161,13 @@ main (int argc, char ** argv)
         static struct option lopts[] = {
             {"threads", required_argument, 0, 'n'},
             {"refs", required_argument, 0, 'a'},
+            {"line_size", required_argument, 0, 'l'},
             {"help", no_argument, 0, 'h'},
             {"version", no_argument, 0, 'v'},
             {0, 0, 0, 0}
         };
 
-        c = getopt_long(argc, argv, "a:n:hv", lopts, &optidx);
+        c = getopt_long(argc, argv, "a:n:l:hv", lopts, &optidx);
 
         if (c == -1) {
             break;
@@ -174,6 +176,10 @@ main (int argc, char ** argv)
         switch (c) {
             case 'n':
                 threads = atoi(optarg);
+                break;
+            // line size of the cache in bytes
+            case 'l':
+                line_sz = atoi(optarg);
                 break;
             case 'a':
                 refs = strtoul(optarg, NULL, 0);
@@ -193,7 +199,9 @@ main (int argc, char ** argv)
     }
 
 
-    line_sz = get_l1_line_sz();
+    if (!line_sz) {
+        line_sz = get_l1_line_sz();
+    }
 
     threads = (threads > line_sz) ? line_sz : threads;
 
@@ -203,7 +211,7 @@ main (int argc, char ** argv)
     printf("#   %20s : %lu\n", "memory refs", refs);
 
     driver(threads, line_sz, refs);
-    
+
     return 0;
 }
 

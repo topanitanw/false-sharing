@@ -1,11 +1,14 @@
 CC:=gcc
 CFLAGS:= -Wall -O2 -pthread
 
-TARGET:=false
+TARGETS:=false true
 
-all: $(TARGET)
+all: $(TARGETS)
 
 false: false.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+true: true.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
