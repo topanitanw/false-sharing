@@ -45,6 +45,7 @@ typedef struct {
     unsigned idx;
     pthread_t thr;
     unsigned long refs;
+    unsigned long cache_line_sz;
     unsigned long skip_writing;
     volatile unsigned char * buf; // this will be a cache line
 } parm_t;
@@ -120,6 +121,7 @@ driver (
         parm_arr[i].idx  = i;
         parm_arr[i].refs = refs;
         parm_arr[i].skip_writing = skip_writing;
+        parm_arr[i].cache_line_sz = line_sz;
         parm_arr[i].buf  = buf;
         if (pthread_create(&parm_arr[i].thr, NULL, worker, &parm_arr[i]) != 0) {
             ERROR("Couldn't create thread\n");
@@ -241,5 +243,3 @@ main (int argc, char ** argv)
 
     return 0;
 }
-
-

@@ -15,6 +15,8 @@
 
 #define DEFAULT_THREADS 2
 #define DEFAULT_REFS    100
+#define DEFAULT_LINE_SIZE_BYTES 64
+#define DEFAULT_SKIP_WRITING    0
 
 #define LS_PATH "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size"
 
@@ -43,6 +45,7 @@ typedef struct {
     unsigned idx;
     pthread_t thr;
     unsigned long refs;
+    unsigned long skip_writing;
     unsigned cache_line_sz;
     volatile unsigned char * buf; // this will be a cache line
 } parm_t;
@@ -53,12 +56,18 @@ worker (void * in)
 {
     int i;
     parm_t * p = (parm_t*)in;
+    long unsigned skip_writing = 0;
     unsigned int nskip_idx = p->cache_line_sz / sizeof(unsigned char);
     // printf("hello from thread %d (%ld accesses) (%d nskip) \n",
     //        p->idx, p->refs, p->cache_line_sz);
 
     for (i = 0; i < p->refs; i++) {
-        p->buf[p->idx * nskip_idx] = 1;
+        if(skip_writing == p->skip_writing) {
+            p->buf[p->idx * nskip_idx] = 1;
+            skip_writing = 0;
+        } else {
+            skip_writing++;
+        }
     }
 
     return NULL;
@@ -84,7 +93,11 @@ alloc_shared_buf (size_t n, unsigned threads)
 
 
 static void
-driver (unsigned threads, size_t line_sz, unsigned long refs)
+driver (
+    unsigned threads,
+    size_t line_sz,
+    unsigned long refs,
+    unsigned long skip_writing)
 {
     int i;
     void * buf = NULL;
@@ -131,9 +144,18 @@ usage (char * prog)
     printf("Usage: %s [options]\n", prog);
     printf("\nOptions:\n");
 
-    printf("  -n, --threads <thread count> : number of threads to launch (default=%d, max = l1 line size)\n", DEFAULT_THREADS);
-    printf("  -a, --refs <access count> : number of false sharing accesses (default=%d)\n", DEFAULT_REFS);
-    printf("  -l, --line_size <line size in bytes> : line size of the cache in bytes (default=%d)\n", DEFAULT_REFS);
+    printf("  -n, --threads <thread count> : number of threads to launch (default=%d, max = l1 line size)\n",
+           DEFAULT_THREADS);
+    printf("  -a, --refs <access count> : number of false sharing accesses (default=%d)\n",
+           DEFAULT_REFS);
+    printf("  -l, --line_size <line size in bytes> : line size of the cache in bytes (default=%d)\n",
+           DEFAULT_LINE_SIZE_BYTES);
+    // skip_writing = 0 means that it keeps writing to the share object/memory
+    // skip_writing = 10 means that it skips writing to the share object/memory
+    // for 10 times. If a = 100 and s = 10, it only writes to the share
+    // object/memory for 10 times.
+    printf("  -s, --skip_writing <times> : line size of the cache in bytes (default=%d)\n",
+           DEFAULT_SKIP_WRITING);
     printf("  -h, ---help : display this message\n");
     printf("  -v, --version : display the version number and exit\n");
 
@@ -154,6 +176,7 @@ main (int argc, char ** argv)
 {
     unsigned threads   = DEFAULT_THREADS;
     unsigned long refs = DEFAULT_REFS;
+    unsigned long skip_writing = DEFAULT_SKIP_WRITING;
     size_t line_sz     = 0;
 
     int c;
@@ -166,12 +189,13 @@ main (int argc, char ** argv)
             {"threads", required_argument, 0, 'n'},
             {"refs", required_argument, 0, 'a'},
             {"line_size", required_argument, 0, 'l'},
+            {"skip_writing", optional_argument, 0, 's'},
             {"help", no_argument, 0, 'h'},
             {"version", no_argument, 0, 'v'},
             {0, 0, 0, 0}
         };
 
-        c = getopt_long(argc, argv, "a:n:l:hv", lopts, &optidx);
+        c = getopt_long(argc, argv, "a:n:l:s:hv", lopts, &optidx);
 
         if (c == -1) {
             break;
@@ -184,6 +208,9 @@ main (int argc, char ** argv)
             // line size of the cache in bytes
             case 'l':
                 line_sz = atoi(optarg);
+                break;
+            case 's':
+                skip_writing = atoi(optarg);
                 break;
             case 'a':
                 refs = strtoul(optarg, NULL, 0);
@@ -199,7 +226,6 @@ main (int argc, char ** argv)
             default:
                 printf("?? getopt returned character code 0%o ??\n", c);
         }
-
     }
 
 
@@ -212,11 +238,10 @@ main (int argc, char ** argv)
     printf("# %s experiment config:\n", EXP_DESC);
     printf("#   %20s : %d\n", "threads", threads);
     printf("#   %20s : %luB\n", "L1 line size", line_sz);
+    printf("#   %20s : %lu\n", "skip_writing", skip_writing);
     printf("#   %20s : %lu\n", "memory refs", refs);
 
-    driver(threads, line_sz, refs);
+    driver(threads, line_sz, refs, skip_writing);
 
     return 0;
 }
-
-
