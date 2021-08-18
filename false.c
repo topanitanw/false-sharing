@@ -9,6 +9,7 @@
 #include <sched.h>
 #include <pthread.h>
 #include <getopt.h>
+#include <stdint.h>
 
 #define VERSION_STRING "0.0.1"
 #define EXP_DESC "false sharing"
@@ -22,6 +23,16 @@
 
 #define ERROR(fmt, args...) fprintf(stderr, "EXP-ERR: " fmt, ##args)
 
+typedef struct {
+    unsigned idx;
+    pthread_t thr;
+    unsigned long refs;
+    unsigned long cache_line_sz;
+    unsigned long skip_writing;
+    volatile unsigned char * buf; // this will be a cache line
+} parm_t;
+
+pthread_barrier_t   barrier;
 
 size_t
 get_l1_line_sz (void)
@@ -41,35 +52,29 @@ get_l1_line_sz (void)
 }
 
 
-typedef struct {
-    unsigned idx;
-    pthread_t thr;
-    unsigned long refs;
-    unsigned long cache_line_sz;
-    unsigned long skip_writing;
-    volatile unsigned char * buf; // this will be a cache line
-} parm_t;
-
-
 static void*
 worker (void * in)
 {
     int i;
     parm_t * p = (parm_t*)in;
     long unsigned skip_writing = 0;
+    int32_t ret;
     printf("hello from thread %d (%ld accesses)\n", p->idx, p->refs);
 
     for (i = 0; i < p->refs; i++) {
-        if(skip_writing == p->skip_writing) {
-            printf("thread %d %ld accesses %ld skip_writing\n",
-                   p->idx, p->refs, p->skip_writing);
+        if((i % p->skip_writing) == 0) {
+            printf("thread %d %d/%ld accesses %ld skip_writing\n",
+                   p->idx, i, p->refs, p->skip_writing);
             p->buf[p->idx] = 1;
             skip_writing = 0;
         } else {
-            printf("thread %d %ld accesses %ld skip_writing ++\n",
-                   p->idx, p->refs, p->skip_writing);
+            // printf("thread %d %ld accesses %ld skip_writing ++\n",
+            //        p->idx, p->refs, p->skip_writing);
             skip_writing++;
         }
+        // printf("thread %d is waitting in barrier\n", p->idx);
+        ret = pthread_barrier_wait(&barrier);
+        // printf("thread %d is out of barrier\n", p->idx);
     }
 
     return NULL;
@@ -237,6 +242,8 @@ main (int argc, char ** argv)
 
     threads = (threads > line_sz) ? line_sz : threads;
 
+    int32_t ret = pthread_barrier_init(&barrier, NULL, threads);
+
     printf("# %s experiment config:\n", EXP_DESC);
     printf("#   %20s : %d\n", "threads", threads);
     printf("#   %20s : %luB\n", "L1 line size", line_sz);
@@ -245,5 +252,6 @@ main (int argc, char ** argv)
 
     driver(threads, line_sz, refs, skip_writing);
 
+    pthread_barrier_destroy(&barrier);
     return 0;
 }

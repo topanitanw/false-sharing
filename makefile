@@ -32,7 +32,7 @@ true: true.c
 
 eval:
 	for bin in $(TARGETS); do \
-		bash ${SCRIPT_DIR}/toplev_debug.sh "./$${bin} -n 2 -a 1000000 -l 64 -s 0" &> $${bin}.csv; \
+		bash ${SCRIPT_DIR}/toplev_debug.sh "./$${bin} -n 2 -a 1000000 -l 64 -s 2" &> $${bin}.csv; \
 		python ${SCRIPT_DIR}/read_perf.py -f $${bin}.csv; \
 	done
 .PHONY: eval
