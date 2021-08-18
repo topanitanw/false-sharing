@@ -61,13 +61,13 @@ worker (void * in)
 
     for (i = 0; i < p->refs; i++) {
         if(skip_writing == p->skip_writing) {
-            printf("thread %d %ld accesses %ld skip_writing\n",
-                   p->idx, p->refs, p->skip_writing);
+            // printf("thread %d %ld accesses %ld skip_writing\n",
+            //        p->idx, p->refs, p->skip_writing);
             p->buf[p->idx] = 1;
             skip_writing = 0;
         } else {
-            printf("thread %d %ld accesses %ld skip_writing ++\n",
-                   p->idx, p->refs, p->skip_writing);
+            // printf("thread %d %ld accesses %ld skip_writing ++\n",
+            //        p->idx, p->refs, p->skip_writing);
             skip_writing++;
         }
     }

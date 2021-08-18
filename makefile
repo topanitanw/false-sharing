@@ -8,25 +8,27 @@ TARGETS:=false true
 PROJ_ROOT=$(shell cd ..; git rev-parse --show-toplevel)
 SCRIPT_DIR:=${PROJ_ROOT}/scripts
 NTHREAD:=2
-NSKIP:=2
+NSKIP:=0
 
 all: $(TARGETS)
 .PHONY: all
 
 tests:
-	./false -h
-	@echo "-------------------------------------------------------------\n"
-	./false -n 2 -a 10000 -l 64 -s 10000
-	@echo "-------------------------------------------------------------\n"
-	./true -h
-	@echo "-------------------------------------------------------------\n"
-	./true -n 2 -a 10000 -l 64 -s 10000
-	@echo "-------------------------------------------------------------\n"
+	for bin in $(TARGETS); do \
+		./$${bin} -h; \
+		echo "----------------------------------------------------------\n"; \
+		./$${bin} -n 2 -a 10000 ; \
+		echo "----------------------------------------------------------\n"; \
+	done
 .PHONY: tests
 
 false: false.c
 	$(CC) $(CFLAGS) -o $@ $<
 .PHONY: false
+
+original_false: original_false.c
+	$(CC) $(CFLAGS) -o $@ $<
+.PHONY: original_false
 
 true: true.c
 	$(CC) $(CFLAGS) -o $@ $<
