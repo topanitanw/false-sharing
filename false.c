@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <getopt.h>
 #include <stdint.h>
+#include <assert.h>
 
 #define VERSION_STRING "0.0.1"
 #define EXP_DESC "false sharing"
@@ -17,19 +18,19 @@
 #define DEFAULT_THREADS 2
 #define DEFAULT_REFS    100
 #define DEFAULT_LINE_SIZE_BYTES 64
-#define DEFAULT_SKIP_WRITING    0
+#define DEFAULT_SKIP_WRITING    1
 
 #define LS_PATH "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size"
 
 #define ERROR(fmt, args...) fprintf(stderr, "EXP-ERR: " fmt, ##args)
 
 typedef struct {
-    unsigned idx;
+    uint64_t idx;
     pthread_t thr;
-    unsigned long refs;
-    unsigned long cache_line_sz;
-    unsigned long skip_writing;
-    volatile unsigned char * buf; // this will be a cache line
+    uint64_t refs;
+    uint64_t cache_line_sz;
+    uint64_t skip_writing;
+    volatile uint64_t * buf; // this will be a cache line
 } parm_t;
 
 pthread_barrier_t   barrier;
@@ -46,39 +47,42 @@ get_l1_line_sz (void)
         return 0;
     }
 
-    fscanf(p, "%d", &sz);
+    int32_t ret = fscanf(p, "%d", &sz);
     fclose(p);
-    return sz;
+    return ret == 1 ? sz : 0;
 }
 
 
 static void*
 worker (void * in)
 {
-    int i;
+    uint64_t i;
     parm_t * p = (parm_t*)in;
-    long unsigned skip_writing = 0;
-    int32_t ret;
-    printf("hello from thread %d (%ld accesses)\n", p->idx, p->refs);
+    // printf("# hi thread %ld %ld accesses %ld index\n",
+    //        p->idx, p->refs, p->idx);
 
     for (i = 0; i < p->refs; i++) {
-        if((i % p->skip_writing) == 0) {
-            printf("thread %d %d/%ld accesses %ld skip_writing\n",
-                   p->idx, i, p->refs, p->skip_writing);
-            p->buf[p->idx] = 1;
-            skip_writing = 0;
-        } else {
-            // printf("thread %d %ld accesses %ld skip_writing ++\n",
+        // if(skip_writing + 1 > p->skip_writing) {
+        if(i % p->skip_writing == 0) {
+            // printf("# thread %d %d/%ld accesses %ld skip_writing\n",
+            //        p->idx, i, p->refs, p->skip_writing);
+            __sync_add_and_fetch(&(p->buf[p->idx]), 1);
+            // skip_writing = 0;
+        } /*else {
+            // printf("# thread %d %ld accesses %ld skip_writing ++\n",
             //        p->idx, p->refs, p->skip_writing);
-            skip_writing++;
+            // skip_writing++;
         }
+        */
         // printf("thread %d is waitting in barrier\n", p->idx);
-        ret = pthread_barrier_wait(&barrier);
+        pthread_barrier_wait(&barrier);
         // printf("thread %d is out of barrier\n", p->idx);
     }
 
+    printf("# thread %lu value %lu\n", p->idx, p->buf[p->idx]);
     return NULL;
 }
+
 
 static void *
 alloc_shared_buf (size_t n)
@@ -89,6 +93,7 @@ alloc_shared_buf (size_t n)
         return NULL;
     }
 
+    // make sure that this function returns the aligned shared buf
     if ((unsigned long)buf & (n-1)) {
         void * adj = (void*)((unsigned long)(buf + n) & ~(n-1));
         return adj;
@@ -118,13 +123,12 @@ driver (
 
 
     buf = alloc_shared_buf(line_sz);
-
     if (!buf) {
         ERROR("Couldn't allocate shared buf\n");
         exit(EXIT_FAILURE);
     }
 
-    //printf("Allocated aligned shared buf (%p)\n", buf);
+    printf("Allocated aligned shared buf (%p)\n", buf);
 
     for (i = 0; i < threads; i++) {
         parm_arr[i].idx  = i;
@@ -142,7 +146,6 @@ driver (
         pthread_join(parm_arr[i].thr, NULL);
     }
 }
-
 
 
 static void
@@ -181,9 +184,9 @@ version ()
 int
 main (int argc, char ** argv)
 {
-    unsigned threads   = DEFAULT_THREADS;
-    unsigned long refs = DEFAULT_REFS;
-    unsigned long skip_writing = DEFAULT_SKIP_WRITING;
+    uint64_t threads   = DEFAULT_THREADS;
+    uint64_t refs = DEFAULT_REFS;
+    uint64_t skip_writing = DEFAULT_SKIP_WRITING;
     size_t line_sz     = 0;
 
     int c;
@@ -218,6 +221,7 @@ main (int argc, char ** argv)
                 break;
             case 's':
                 skip_writing = atoi(optarg);
+                // assert(skip_writing != 0 && "skip_writing should not be 0\n");
                 break;
             case 'a':
                 refs = strtoul(optarg, NULL, 0);
@@ -240,18 +244,24 @@ main (int argc, char ** argv)
         line_sz = get_l1_line_sz();
     }
 
-    threads = (threads > line_sz) ? line_sz : threads;
+    threads = (threads > line_sz / sizeof(uint64_t)) ? line_sz : threads;
 
-    int32_t ret = pthread_barrier_init(&barrier, NULL, threads);
+    if(pthread_barrier_init(&barrier, NULL, threads)) {
+        ERROR("Couldn't init barrier\n");
+        exit(EXIT_FAILURE);
+    }
 
     printf("# %s experiment config:\n", EXP_DESC);
-    printf("#   %20s : %d\n", "threads", threads);
+    printf("#   %20s : %lu\n", "threads", threads);
     printf("#   %20s : %luB\n", "L1 line size", line_sz);
     printf("#   %20s : %lu\n", "skip_writing", skip_writing);
     printf("#   %20s : %lu\n", "memory refs", refs);
 
     driver(threads, line_sz, refs, skip_writing);
 
-    pthread_barrier_destroy(&barrier);
+    if(pthread_barrier_destroy(&barrier)) {
+        ERROR("Couldn't destroy barrier\n");
+        exit(EXIT_FAILURE);
+    }
     return 0;
 }
