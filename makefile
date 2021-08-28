@@ -8,21 +8,19 @@ TARGETS:=false true original_false
 
 PROJ_ROOT=$(shell cd ..; git rev-parse --show-toplevel)
 SCRIPT_DIR:=${PROJ_ROOT}/scripts
-NTHREAD:=4
+NTHREAD:=2
 NSKIP:=1
 
 all: $(TARGETS)
 .PHONY: all
 
 tests:
-	./false -h
-	@echo "-------------------------------------------------------------\n"
-	./false -n 2 -a 10000 -l 64 -s 1
-	@echo "-------------------------------------------------------------\n"
-	./non-sharing -h
-	@echo "-------------------------------------------------------------\n"
-	./non-sharing -n 2 -a 10000 -l 64 -s 1
-	@echo "-------------------------------------------------------------\n"
+	for bin in $(TARGETS); do \
+		./$${bin} -h; \
+		echo "----------------------------------------------------------\n"; \
+		./$${bin} -n 2 -a 10000 ; \
+		echo "----------------------------------------------------------\n"; \
+	done
 .PHONY: tests
 
 false: false.c
@@ -30,6 +28,10 @@ false: false.c
 	$(OBJDUMP) -d $@ > $@.obj
 
 original_false: original_false.c
+	$(CC) $(CFLAGS) -o $@ $<
+.PHONY: original_false
+
+true: true.c
 	$(CC) $(CFLAGS) -o $@ $<
 	$(OBJDUMP) -d $@ > $@.obj
 
