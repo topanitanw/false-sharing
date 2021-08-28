@@ -24,6 +24,21 @@
 
 #define ERROR(fmt, args...) fprintf(stderr, "EXP-ERR: " fmt, ##args)
 
+#define DEBUG 0
+#define DEBUGPL(level, fmt, ...)                            \
+    do {                                                    \
+        if ((level) <= DEBUG) {                             \
+            fprintf(                                        \
+                stderr,                                     \
+                "# [DEBUG file: %s func: %s line: %d ] " fmt, \
+                __FILE__,                                   \
+                __FUNCTION__,                               \
+                __LINE__,                                   \
+                ##__VA_ARGS__);                             \
+            fflush(stdout);                                 \
+        }                                                   \
+    } while (0)
+
 typedef struct {
     uint64_t idx;
     pthread_t thr;
@@ -58,22 +73,23 @@ worker (void * in)
 {
     uint64_t i;
     parm_t * p = (parm_t*)in;
-    // printf("# hi thread %ld %ld accesses %ld index\n",
-    //        p->idx, p->refs, p->idx);
+    DEBUGPL(1, "hi thread %ld %ld accesses %ld index\n",
+            p->idx, p->refs, p->idx);
 
     for (i = 0; i < p->refs; i++) {
         if(i % p->skip_writing == 0) {
             // printf("# thread %d %d/%ld accesses %ld skip_writing\n",
             //        p->idx, i, p->refs, p->skip_writing);
-            __sync_add_and_fetch(&(p->buf[p->idx]), 1);
+            // __sync_add_and_fetch(&(p->buf[p->idx]), 1);
+            p->buf[p->idx] = 1;
             // skip_writing = 0;
         }
         // printf("thread %d is waitting in barrier\n", p->idx);
-        pthread_barrier_wait(&barrier);
+        // pthread_barrier_wait(&barrier);
         // printf("thread %d is out of barrier\n", p->idx);
     }
 
-    printf("# thread %lu value %lu\n", p->idx, p->buf[p->idx]);
+    DEBUGPL(1, "thread %lu value %lu\n", p->idx, p->buf[p->idx]);
     return NULL;
 }
 
@@ -122,7 +138,7 @@ driver (
         exit(EXIT_FAILURE);
     }
 
-    printf("Allocated aligned shared buf (%p)\n", buf);
+    printf("# Allocated aligned shared buf (%p)\n", buf);
 
     for (i = 0; i < threads; i++) {
         parm_arr[i].idx  = i;
