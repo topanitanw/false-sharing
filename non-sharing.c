@@ -13,7 +13,7 @@
 #include <assert.h>
 
 #define VERSION_STRING "0.0.1"
-#define EXP_DESC "false sharing"
+#define EXP_DESC "true sharing"
 
 #define DEFAULT_THREADS 2
 #define DEFAULT_REFS    100
@@ -24,6 +24,21 @@
 #define LS_PATH "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size"
 
 #define ERROR(fmt, args...) fprintf(stderr, "EXP-ERR: " fmt, ##args)
+
+#define DEBUG 0
+#define DEBUGPL(level, fmt, ...)                            \
+    do {                                                    \
+        if ((level) <= DEBUG) {                             \
+            fprintf(                                        \
+                stderr,                                     \
+                "# [DEBUG file: %s func: %s line: %d ] " fmt, \
+                __FILE__,                                   \
+                __FUNCTION__,                               \
+                __LINE__,                                   \
+                ##__VA_ARGS__);                             \
+            fflush(stdout);                                 \
+        }                                                   \
+    } while (0)
 
 typedef struct {
     uint64_t idx;
@@ -59,22 +74,23 @@ worker (void * in)
 {
     uint64_t i;
     parm_t * p = (parm_t*)in;
-    // printf("# hi thread %ld %ld accesses %ld index\n",
-    //        p->idx, p->refs, p->idx * INDEX_OFFSET);
+    DEBUGPL(1, "# hi thread %ld %ld accesses %ld index\n",
+            p->idx, p->refs, p->idx * INDEX_OFFSET);
 
     for (i = 0; i < p->refs; i++) {
-        // if(skip_writing + 1 > p->skip_writing) {
-        // if(i % p->skip_writing == 0) {
+        if(i % p->skip_writing == 0) {
             // printf("# thread %d %d/%ld accesses %ld skip_writing\n",
             //        p->idx, i, p->refs, p->skip_writing);
-            // __sync_add_and_fetch(&(p->buf[p->idx * INDEX_OFFSET]), 1);
-        // }
+            //__sync_add_and_fetch(&(p->buf[p->idx * INDEX_OFFSET]), 1);
+            p->buf[p->idx * INDEX_OFFSET] = 1;
+        }
         // printf("thread %d is waitting in barrier\n", p->idx);
-        pthread_barrier_wait(&barrier);
+        // pthread_barrier_wait(&barrier);
         // printf("thread %d is out of barrier\n", p->idx);
     }
 
-    printf("# thread %lu value %lu\n", p->idx, p->buf[p->idx * INDEX_OFFSET]);
+    DEBUGPL(1, "# thread %lu value %lu\n",
+            p->idx, p->buf[p->idx * INDEX_OFFSET]);
     return NULL;
 }
 

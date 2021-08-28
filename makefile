@@ -1,10 +1,10 @@
 SHELL=bash
 
 CC:=gcc
-CFLAGS:= -Wall -O3 -pthread
+CFLAGS:= -Wall -O2 -pthread
 OBJDUMP:=objdump
 
-TARGETS:=false # true original_false
+TARGETS:=false true original_false
 
 PROJ_ROOT=$(shell cd ..; git rev-parse --show-toplevel)
 SCRIPT_DIR:=${PROJ_ROOT}/scripts
@@ -17,11 +17,11 @@ all: $(TARGETS)
 tests:
 	./false -h
 	@echo "-------------------------------------------------------------\n"
-	./false -n 2 -a 10000 -l 64 -s 10000
+	./false -n 2 -a 10000 -l 64 -s 1
 	@echo "-------------------------------------------------------------\n"
-	./true -h
+	./non-sharing -h
 	@echo "-------------------------------------------------------------\n"
-	./true -n 2 -a 10000 -l 64 -s 10000
+	./non-sharing -n 2 -a 10000 -l 64 -s 1
 	@echo "-------------------------------------------------------------\n"
 .PHONY: tests
 
@@ -33,7 +33,7 @@ original_false: original_false.c
 	$(CC) $(CFLAGS) -o $@ $<
 	$(OBJDUMP) -d $@ > $@.obj
 
-true: true.c
+non-sharing: non-sharing.c
 	$(CC) $(CFLAGS) -o $@ $<
 	$(OBJDUMP) -d $@ > $@.obj
 
